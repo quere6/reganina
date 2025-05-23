@@ -2,8 +2,6 @@ import random
 import re
 import asyncio
 import json 
-import os from telegram 
-import Update, InputFile from telegram.ext
 import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters from collections 
 import defaultdict from datetime
 import datetime, timedelta from difflib 
