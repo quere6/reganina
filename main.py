@@ -1,10 +1,11 @@
-import random 
-import re 
-import asyncio 
-import json
-import Update, InputFile from telegram.ext 
-import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters from collections
-import defaultdict from datetime 
+import random
+import re
+import asyncio
+import json 
+import os from telegram 
+import Update, InputFile from telegram.ext
+import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters from collections 
+import defaultdict from datetime
 import datetime, timedelta from difflib 
 import SequenceMatcher
 PHRASES = { "ржомба": "🤣", "ну ти там держись": "Ссикло", "а воно мені не нада": "Не мужик", "наш живчик": "Містер Біст", "сігма бой": "Богдан" }
