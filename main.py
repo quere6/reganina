@@ -2,7 +2,7 @@ import asyncio
 import os
 from aiohttp import web
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
-from profiles.profiles_handlers import start, help_cmd, profile_cmd, daily_cmd, reply_handler
+from profiles.profile_handlers import start, help_cmd, profile_cmd, daily_cmd, reply_handler
 from shop.shop_handlers import shop_handler
 from duels.duels_handlers import duel_handler
 
