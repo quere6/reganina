@@ -1,22 +1,29 @@
 import asyncio
 import os
 from aiohttp import web
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+)
 from profiles.profile_handlers import start, help_cmd, profile_cmd, daily_cmd, reply_handler
 from shop.shop_handlers import shop_handler
 from duels.duels_handlers import duel_handler
 
 TOKEN = "7957837080:AAH1O_tEfW9xC9jfUt2hRXILG-Z579_w7ig"
 PORT = int(os.environ.get("PORT", 8000))
-WEBHOOK_URL = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/webhook/{TOKEN}"
+RENDER_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+
+if not RENDER_HOSTNAME:
+    raise RuntimeError("RENDER_EXTERNAL_HOSTNAME is not set in environment variables.")
+
+WEBHOOK_URL = f"https://{RENDER_HOSTNAME}/webhook/{TOKEN}"
 
 async def handle_root(request):
-    return web.Response(text="Bot is running")
+    return web.Response(text="Bot is running.")
 
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Команди
+    # Додаємо хендлери
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("profile", profile_cmd))
@@ -25,7 +32,7 @@ async def main():
     app.add_handler(duel_handler)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, reply_handler))
 
-    # Webhook-сервер
+    # aiohttp вебсервер
     async def webhook_handler(request):
         data = await request.json()
         await app.update_queue.put(data)
@@ -45,9 +52,6 @@ async def main():
     await app.bot.set_webhook(url=WEBHOOK_URL)
     print("Bot started with webhook")
 
-    # Не використовуй app.run_polling() тут
-
-    # Залишаємо програму вічно активною
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
