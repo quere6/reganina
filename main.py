@@ -22,7 +22,13 @@ async def main():
     # Обробка текстових повідомлень
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, reply_handler))
 
-    await app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.get_event_loop().run_until_complete(main())
+    except RuntimeError:
+        asyncio.run(main())
