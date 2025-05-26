@@ -226,7 +226,7 @@ async def achievements(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Головна функція запуску бота
 def main():
-    app = ApplicationBuilder().token("YOUR_BOT_TOKEN_HERE").build()
+    app = ApplicationBuilder().token("7957837080:AAH1O_tEfW9xC9jfUt2hRXILG-Z579_w7ig").build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
