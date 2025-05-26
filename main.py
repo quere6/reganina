@@ -199,7 +199,7 @@ async def achievements(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     load_data()
-    app = ApplicationBuilder().token("ТВОЙ_ТОКЕН").build()
+    app = ApplicationBuilder().token("7957837080:AAH1O_tEfW9xC9jfUt2hRXILG-Z579_w7ig").build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
