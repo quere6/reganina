@@ -148,10 +148,7 @@ if __name__ == '__main__':
     import os
     from telegram.ext import Application
 
-    TOKEN = os.getenv('7957837080:AAH1O_tEfW9xC9jfUt2hRXILG-Z579_w7ig')
-    if not TOKEN:
-        print("Встанови змінну середовища BOT_TOKEN з токеном бота")
-        exit(1)
+    TOKEN = '7957837080:AAH1O_tEfW9xC9jfUt2hRXILG-Z579_w7ig'
 
     app = ApplicationBuilder().token(TOKEN).build()
 
