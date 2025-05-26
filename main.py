@@ -1,194 +1,204 @@
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from telegram import Update
 import json
-import time
 import random
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-USERS_FILE = 'users.json'
-GUILDS_FILE = 'guilds.json'
+users = {}
+guilds = {}
 
-MAX_ENERGY = 100
-FEED_COINS_BASE = 25
-XP_PER_FEED = 10
-GUILD_CREATION_COST = 1000
-MAX_GUILD_MEMBERS = 20
-
-# Магазин (назва предмета : {ціна, атака})
-SHOP_ITEMS = {
-    "меч": {"price": 500, "attack": 5},
-    "сабля": {"price": 800, "attack": 8},
-    "арбалет": {"price": 1200, "attack": 12},
-    "щит": {"price": 700, "attack": 0},  # для майбутнього захисту
-}
-
-# Функції для роботи з файлами (завантаження/збереження)
-def load_data(filename):
+def load_data():
+    global users, guilds
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        with open("users.json", "r") as f:
+            users = json.load(f)
     except FileNotFoundError:
-        return {}
+        users = {}
 
-def save_data(filename, data):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+    try:
+        with open("guilds.json", "r") as f:
+            guilds = json.load(f)
+    except FileNotFoundError:
+        guilds = {}
 
-# Оновлення енергії користувача
-def update_energy(user):
-    now = time.time()
-    elapsed = now - user.get('energy_last_update', now)
-    energy_gain = int(elapsed // 60)  # 1 енергія за 1 хвилину
-    if energy_gain > 0:
-        user['energy'] = min(MAX_ENERGY, user.get('energy', MAX_ENERGY) + energy_gain)
-        user['energy_last_update'] = now
+def save_data():
+    with open("users.json", "w") as f:
+        json.dump(users, f)
+    with open("guilds.json", "w") as f:
+        json.dump(guilds, f)
 
-# Ініціалізація користувача
-def init_user(users, user_id, username):
+def get_user(user_id):
+    user_id = str(user_id)
     if user_id not in users:
         users[user_id] = {
-            'username': username,
-            'coins': 100,
-            'xp': 0,
-            'energy': MAX_ENERGY,
-            'energy_last_update': time.time(),
-            'guild': None,
-            'rzhomb': 1,
-            'bans': 0,
-            'last_feed': 0,
-            'active_quest': None,
-            'last_daily': 0,
-            'inventory': {},  # предмети гравця
-            'attack': 1  # базова атака
+            "name": "",
+            "guild": None,
+            "balance": 100,
+            "inventory": [],
+            "energy": 100,
+            "quests": [],
+            "achievements": [],
+            "attack": 10,
         }
+    return users[user_id]
 
-# --- твої існуючі команди (start, help, profile, daily, feed, create_guild) ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    user["name"] = update.effective_user.first_name
+    save_data()
+    await update.message.reply_text(f"Привіт, {user['name']}! Твоя ржомба створена.")
 
-async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    users = load_data(USERS_FILE)
-    user_id = str(update.effective_user.id)
-    if user_id not in users:
-        await update.message.reply_text("❗ Спершу використай /start")
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    commands = [
+        "/profile - Показати профіль",
+        "/daily - Отримати щоденну нагороду",
+        "/feed - Погодувати ржомбу",
+        "/createguild [назва] - Створити гільдію",
+        "/joinguild [назва] - Приєднатись до гільдії",
+        "/leaveguild - Покинути гільдію",
+        "/guild - Інформація про гільдію",
+        "/guildtop - Топ гільдій",
+        "/quests - Поточні квести",
+        "/completequest - Завершити квест",
+        "/duel [@юзернейм] - Викликати на дуель",
+        "/shop - Магазин",
+        "/achievements - Досягнення",
+    ]
+    await update.message.reply_text("\n".join(commands))
+
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    msg = f"""Профіль {user['name']}:
+Баланс: {user['balance']}
+Гільдія: {user['guild']}
+Інвентар: {', '.join(user['inventory']) or 'порожньо'}
+Енергія: {user['energy']}
+Атака: {user['attack']}
+"""
+    await update.message.reply_text(msg)
+
+async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    reward = 50
+    user["balance"] += reward
+    save_data()
+    await update.message.reply_text(f"Ти отримав {reward} монет!")
+
+async def feed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if user["energy"] < 100:
+        user["energy"] = 100
+        save_data()
+        await update.message.reply_text("Твоя ржомба наїлась і повна енергії!")
+    else:
+        await update.message.reply_text("Ржомба вже сита!")
+
+async def create_guild(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if user["guild"]:
+        await update.message.reply_text("Ти вже в гільдії.")
         return
-
-    user = users[user_id]
-    text = "🛒 *Магазин зброї:*\n"
-    for item, info in SHOP_ITEMS.items():
-        text += f"{item.capitalize()}: {info['price']} монет, атака +{info['attack']}\n"
-    text += "\nЩоб купити: /buy [назва предмета]"
-    await update.message.reply_text(text, parse_mode='Markdown')
-
-async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    users = load_data(USERS_FILE)
-    user_id = str(update.effective_user.id)
-    if user_id not in users:
-        await update.message.reply_text("❗ Спершу використай /start")
+    name = " ".join(context.args)
+    if not name:
+        await update.message.reply_text("Вкажи назву гільдії.")
         return
-
-    user = users[user_id]
-    args = context.args
-    if not args:
-        await update.message.reply_text("⚠️ Вкажи назву предмета для покупки: /buy [назва]")
+    if name in guilds:
+        await update.message.reply_text("Така гільдія вже існує.")
         return
+    guilds[name] = {"members": [update.effective_user.id], "level": 1}
+    user["guild"] = name
+    save_data()
+    await update.message.reply_text(f"Гільдія '{name}' створена!")
 
-    item_name = args[0].lower()
-    if item_name not in SHOP_ITEMS:
-        await update.message.reply_text("❌ Такого предмета немає в магазині.")
+async def joinguild(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if user["guild"]:
+        await update.message.reply_text("Ти вже в гільдії.")
         return
-
-    item = SHOP_ITEMS[item_name]
-    if user['coins'] < item['price']:
-        await update.message.reply_text("❌ У тебе недостатньо монет.")
+    name = " ".join(context.args)
+    if name not in guilds:
+        await update.message.reply_text("Такої гільдії не існує.")
         return
+    guilds[name]["members"].append(update.effective_user.id)
+    user["guild"] = name
+    save_data()
+    await update.message.reply_text(f"Ти приєднався до '{name}'.")
 
-    # Купівля предмета
-    user['coins'] -= item['price']
-    user['inventory'][item_name] = user['inventory'].get(item_name, 0) + 1
-    user['attack'] += item['attack']
+async def leaveguild(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if not user["guild"]:
+        await update.message.reply_text("Ти не в гільдії.")
+        return
+    name = user["guild"]
+    guilds[name]["members"].remove(update.effective_user.id)
+    if not guilds[name]["members"]:
+        del guilds[name]
+    user["guild"] = None
+    save_data()
+    await update.message.reply_text(f"Ти покинув '{name}'.")
 
-    save_data(USERS_FILE, users)
-    await update.message.reply_text(f"✅ Ти купив {item_name}! Твоя атака тепер {user['attack']}.")
+async def guild(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if not user["guild"]:
+        await update.message.reply_text("Ти не в гільдії.")
+        return
+    g = guilds[user["guild"]]
+    await update.message.reply_text(f"Гільдія '{user['guild']}'\nРівень: {g['level']}\nУчасники: {len(g['members'])}")
 
-# Дуельна команда (покликання на дуель, підтвердження, і бій)
-duel_requests = {}  # user_id: opponent_id
+async def guildtop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sorted_guilds = sorted(guilds.items(), key=lambda x: x[1]["level"], reverse=True)
+    msg = "Топ гільдій:\n"
+    for i, (name, data) in enumerate(sorted_guilds[:5], start=1):
+        msg += f"{i}. {name} (Рівень {data['level']})\n"
+    await update.message.reply_text(msg)
+
+async def quests(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if not user["quests"]:
+        quest = {"name": "Переможи жабу", "reward": 30}
+        user["quests"].append(quest)
+        save_data()
+    q = user["quests"][0]
+    await update.message.reply_text(f"Твій квест: {q['name']} (+{q['reward']} монет)")
+
+async def completequest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if not user["quests"]:
+        await update.message.reply_text("У тебе немає активного квесту.")
+        return
+    reward = user["quests"][0]["reward"]
+    user["balance"] += reward
+    user["quests"] = []
+    save_data()
+    await update.message.reply_text(f"Квест виконано! +{reward} монет.")
 
 async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    users = load_data(USERS_FILE)
-    challenger_id = str(update.effective_user.id)
-    if challenger_id not in users:
-        await update.message.reply_text("❗ Спершу використай /start")
+    user = get_user(update.effective_user.id)
+    if not context.args or not context.args[0].startswith("@"):
+        await update.message.reply_text("Вкажи @юзернейм противника.")
         return
+    opponent_username = context.args[0][1:]
+    # Проста заглушка — у реальності треба мапити username на user_id
+    await update.message.reply_text(f"Ти викликав @{opponent_username} на дуель. Але поки що це лише декоративно.")
 
-    args = context.args
-    if not args:
-        await update.message.reply_text("⚠️ Вкажи ID опонента: /duel [ID гравця]")
-        return
+async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    items = {
+        "меч": {"cost": 50, "attack": 5},
+        "щит": {"cost": 40, "attack": 2},
+    }
+    msg = "Магазин:\n"
+    for name, data in items.items():
+        msg += f"{name.title()} - {data['cost']} монет (атака +{data['attack']})\n"
+    await update.message.reply_text(msg)
 
-    opponent_id = args[0]
-    if opponent_id == challenger_id:
-        await update.message.reply_text("❌ Не можна викликати себе на дуель.")
-        return
-
-    if opponent_id not in users:
-        await update.message.reply_text("❌ Опонент не знайдений.")
-        return
-
-    if challenger_id in duel_requests or opponent_id in duel_requests.values():
-        await update.message.reply_text("⌛ Хтось із вас вже у процесі дуелі.")
-        return
-
-    duel_requests[challenger_id] = opponent_id
-    await update.message.reply_text(f"⚔️ Ти викликав {users[opponent_id]['username']} на дуель! Чекаємо підтвердження...")
-
-    # Відправляємо повідомлення опоненту з кнопкою прийняття дуелі (спрощено)
-    # Для телеграму з кнопками потрібен CallbackQueryHandler, але для спрощення тут просто текст
-    # Користувач опонент має написати /acceptduel [challenger_id] для підтвердження
-
-async def acceptduel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    users = load_data(USERS_FILE)
-    opponent_id = str(update.effective_user.id)
-    args = context.args
-    if not args:
-        await update.message.reply_text("⚠️ Вкажи ID того, хто тебе викликав: /acceptduel [ID]")
-        return
-
-    challenger_id = args[0]
-    if challenger_id not in duel_requests or duel_requests[challenger_id] != opponent_id:
-        await update.message.reply_text("❌ Немає запрошення на дуель від цього гравця.")
-        return
-
-    # Проведення дуелі
-    challenger = users[challenger_id]
-    opponent = users[opponent_id]
-
-    # Просто порівнюємо атаку + випадковий фактор
-    challenger_power = challenger.get('attack', 1) + random.randint(0, 5)
-    opponent_power = opponent.get('attack', 1) + random.randint(0, 5)
-
-    if challenger_power > opponent_power:
-        winner_id, loser_id = challenger_id, opponent_id
-    elif opponent_power > challenger_power:
-        winner_id, loser_id = opponent_id, challenger_id
-    else:
-        winner_id = loser_id = None  # нічиї
-
-    if winner_id:
-        users[winner_id]['coins'] += 100
-        users[loser_id]['coins'] = max(0, users[loser_id]['coins'] - 50)
-        result_text = (f"🏆 Виграв {users[winner_id]['username']}!\n"
-                       f"Виграш: +100 монет\n"
-                       f"Програш: -50 монет")
-    else:
-        result_text = "🤝 Дуель закінчилась нічиєю!"
-
-    # Видаляємо запит
-    duel_requests.pop(challenger_id, None)
-
-    save_data(USERS_FILE, users)
-    await update.message.reply_text(result_text)
-
-# --- реєстрація хендлерів ---
+async def achievements(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = get_user(update.effective_user.id)
+    if not user["achievements"]:
+        user["achievements"].append("Перший запуск!")
+        save_data()
+    await update.message.reply_text(f"Твої досягнення: {', '.join(user['achievements'])}")
 
 def main():
+    load_data()
     app = ApplicationBuilder().token("ТВОЙ_ТОКЕН").build()
 
     app.add_handler(CommandHandler("start", start))
@@ -204,9 +214,7 @@ def main():
     app.add_handler(CommandHandler("quests", quests))
     app.add_handler(CommandHandler("completequest", completequest))
     app.add_handler(CommandHandler("duel", duel))
-    app.add_handler(CommandHandler("acceptduel", acceptduel))  # підтвердження дуелі
     app.add_handler(CommandHandler("shop", shop))
-    app.add_handler(CommandHandler("buy", buy))
     app.add_handler(CommandHandler("achievements", achievements))
 
     print("Бот запущено...")
